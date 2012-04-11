@@ -37,6 +37,9 @@
 #include <string.h>
 #include <ctype.h>
 
+#include <fcntl.h>
+#include <unistd.h>
+
 typedef uint16_t u16;
 typedef uint32_t u32;
 
@@ -168,28 +171,34 @@ void dumpstate(struct dcpu *d) {
 		out);
 }
 
-void load(struct dcpu *d, const char *fn) {
-	FILE *fp;
-	char buf[128];
+int load(struct dcpu *d, const char *fn) {
+	int fd = open(fn, O_RDONLY);
+	int ret;
 	u16 n = 0;
-	if (!(fp = fopen(fn, "r"))) {
-		fprintf(stderr, "cannot open: %s\n", fn);
-		exit(1);
-	}	
-	while (!feof(fp) && fgets(buf, 128, fp)) {
-		if (!isalnum(buf[0]))
-			continue;
-		d->m[n++] = strtoul(buf, 0, 16);
+
+	if (fd == -1) {
+		printf("Couldn't open %s\n", fn);
+		return -1;
 	}
+
+	while(1) {
+		u16 val;
+		ret = read(fd, &val, sizeof(val));
+		if (ret != sizeof(val))
+			break;
+		d->m[n++] = val;
+	}
+
 	fprintf(stderr,"< LOADED %d WORDS >\n", n);
-	fclose(fp);
+	return ret;
 }
-	
+
 int main(int argc, char **argv) {
 	struct dcpu d;
 	memset(&d, 0, sizeof(d));
 
-	load(&d, argc > 1 ? argv[1] : "out.hex");
+	if (load(&d, argc > 1 ? argv[1] : "out.bin"))
+		return -1;
 
 	dumpheader();
 	for (;;) {
