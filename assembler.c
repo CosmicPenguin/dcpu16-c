@@ -37,6 +37,8 @@
 #include <stdarg.h>
 #include <string.h>
 #include <ctype.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -325,31 +327,29 @@ done:
 	fclose(fin);
 }
 
-void emit(const char *fn) {
-	FILE *fp;
-	u16 *pc = image;
-	u16 *end = image + PC;
-	u16 *dis = pc;
-	filename = fn;
-	linenumber = 0;
-	fp = fopen(fn, "w");
-	if (!fp) die("cannot write file");
+int emit(const char *fn)
+{
+	int fd, rem = PC * sizeof(u16);
+	void *pc = image;
 
-	while (pc < end) {
-		if (pc == dis) {
-			char out[128];
-			dis = disassemble(pc, out);
-			fprintf(fp, "%04x\t%04x:\t%s\n", *pc, (unsigned)(pc-image), out);
-		} else {
-			fprintf(fp, "%04x\n", *pc);
-		}
-		pc++;
+	fd = open(fn, O_WRONLY | O_CREAT | O_TRUNC,  S_IRUSR | S_IWUSR);
+	if (fd == -1)
+		die("Cannot write file");
+
+	while(rem) {
+		int ret = write(fd, pc, rem);
+		if (ret <= 0)
+			break;
+		rem -= ret;
+		pc += ret;
 	}
-	fclose(fp);
+	
+	close(fd);
+	return rem ? -1 : 0;
 }
 
 int main(int argc, char **argv) {
-	const char *outfn = "out.hex";
+	const char *outfn = "out.bin";
 
 	while (argc > 1) {
 		argc--;
